@@ -145,4 +145,7 @@ def get_camera_name(camera: gp.Camera) -> str:
     return camera_model
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\nProgram terminated by user.")
