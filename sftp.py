@@ -1,80 +1,45 @@
 from pathlib import Path
 import paramiko
 import os
-from dotenv import load_dotenv
-from queue import Queue
-from threading import Thread, Event
-from collections.abc import Callable
-from getpass import getpass
-from typing import Optional
 
-sftp = None
-transport = None
+from status import file_status, file_status_lock, file_status_set, Stage
+from env import get_env
 
-def get_env():
-    load_dotenv()
-    HOST = env("SFTP_HOST", prompt="Host")
-    USER = env("SFTP_USER", prompt="Username")
-    PASSWORD = env("SFTP_PASS", action=getpass, prompt="Password")
-    PORT = int(env("SFTP_PORT", prompt="Port", default="22"))
 
-    return HOST, USER, PASSWORD, PORT
+HOST, USER, PASSWORD, PORT = get_env()
 
-def env(key: str, prompt: str, action: Callable[[str], str] = input, default: Optional[str] = None) -> str:
-    res = os.getenv(key)
-    while res is None or res == "":
-        if default is not None:
-            res = action(f"{prompt} ({default}): ")
-        else:
-            res = action(f"{prompt}: ")
+def test_connection():
+    global HOST, USER, PASSWORD, PORT
 
-        if res == "" and default is not None:
-            res = default
+    print(f"Testing SFTP connection to {HOST}:{PORT}...")
 
-    return res
+    transport = paramiko.Transport((HOST, PORT))
+    try:
+        transport.connect(username=USER, password=PASSWORD)
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp.listdir(".")
+        print("SFTP connection OK.")
+        return True
+    finally:
+        sftp.close()
+    
+    transport.close()
 
-def connect():
-    """
-    Establish an SFTP connection.
-    """
-    global sftp, transport
 
-    HOST, USER, PASSWORD, PORT = get_env()
-
+def upload(source: Path, remote_path: str):
+    global HOST, USER, PASSWORD, PORT
     transport = paramiko.Transport((HOST, PORT))
     transport.connect(username=USER, password=PASSWORD)
     sftp = paramiko.SFTPClient.from_transport(transport)
-    print(f"Connected to {HOST} via SFTP.")
 
-def upload(source: Path, remote_path: str):
-    """
-    Upload a local file to the remote server.
-    """
-    if sftp is None:
-        print("SFTP connection not established.")
-        return
+    def progress_callback(transferred, total):
+        file_status_set(source.name, Stage.UPLOADING, int(transferred / total * 100))
 
-    # Upload the file
-    sftp.put(str(source), remote_path)
-    
-def list_remote(path: str = '.'):
-    """
-    List files in a remote directory.
-    """
-    if sftp is None:
-        print("SFTP connection not established.")
-        return
-    return sftp.listdir(path)
-
-def close():
-    """
-    Close the SFTP connection.
-    """
-    global sftp, transport
-
-    if sftp:
+    try:
+        sftp.put(str(source), remote_path, callback=progress_callback)
+        file_status_set(source.name, Stage.UPLOADING, 100)
+    except Exception as e:
+        pass
+    finally:
         sftp.close()
         transport.close()
-        sftp = None
-        transport = None
-        print("SFTP connection closed.")

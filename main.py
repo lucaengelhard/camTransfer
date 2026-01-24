@@ -7,7 +7,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock, Thread
+from threading import  Thread
 import itertools
 import sys
 import time
@@ -15,6 +15,8 @@ import time
 # Local modules
 import sftp
 import encryption
+import cli
+from status import file_status, file_status_lock, file_status_set, Stage
 
 # Globals
 FLAG_UPLOAD = None
@@ -29,8 +31,7 @@ class Mode(Enum):
 
 executor = ThreadPoolExecutor(max_workers=4)
 
-file_status = {}
-file_status_lock = Lock()
+
 
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
@@ -42,7 +43,7 @@ def main():
         return 0
 
     if FLAG_UPLOAD:
-        sftp.connect()
+        sftp.test_connection()
 
     camera = connect_camera()
     poll_image(timeout=3000, camera=camera, save_dir=save_dir, fernet=fernet, upload_dir=upload_dir)  
@@ -92,7 +93,7 @@ def args():
 def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, fernet: Fernet):
     global FLAG_UPLOAD, FLAG_OVERWRITE
 
-    spinner_thread = Thread(target=display_spinner, daemon=True)
+    spinner_thread = Thread(target=cli.display_spinner, daemon=True)
     spinner_thread.start()
     while True:
         try:
@@ -127,36 +128,21 @@ def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fe
         if FLAG_ENCRYPT and not FLAG_DELETE_LOCAL:
             encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
 
-        with file_status_lock:
-            file_status[target_path.name] = "done"
-            
+        file_status_set(target_path.name, Stage.DONE, 100)
+                
     except Exception as e:
-        with file_status_lock:
-            file_status[target_path.name] = f"failed: {e}"
+        file_status_set(target_path.name, Stage.FAILED)
 
 def save_image(image: gp.CameraFile, path: Path):
+    file_status_set(path.name, Stage.SAVING)
     image.save(str(path))
 
 def upload_image(path: Path, upload_dir: Path):
-    with file_status_lock:
-        file_status[path.name] = "uploading"
     sftp.upload(path, os.path.join(upload_dir, path.name))
 
 def encrypt_image(path: Path, fernet: Fernet, overwrite: bool):
-    with file_status_lock:
-        file_status[path.name] = "encrypting"
+    file_status_set(path.name, Stage.ENCRYPTING)
     encryption.encrypt_file(path, fernet, overwrite)
-
-def display_spinner():
-    spinner_cycle = itertools.cycle(["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"])
-    while True:
-        spin_char = next(spinner_cycle)
-        with file_status_lock:
-            statuses = [f"{fname}: {status}" for fname, status in file_status.items() if status != "done"]
-        status_line = " | ".join(statuses) if statuses else "Waiting for image..."
-        sys.stdout.write(f"\r{spin_char} {status_line}        ")
-        sys.stdout.flush()
-        time.sleep(0.1)
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')
