@@ -2,25 +2,33 @@ import gphoto2 as gp
 import time
 import os
 import sys
+import argparse
+from pathlib import Path
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", type=Path, default=Path.cwd())
+    args = parser.parse_args()
+
+    if not args.dir.is_dir():
+        parser.error(f"The path {args.dir} is not a valid directory.")
+
     # Set up dir
-    save_dir = os.path.join(os.getcwd(), 'images')
-    os.makedirs(save_dir, exist_ok=True)
+    save_dir = Path(os.path.join(os.getcwd(), args.dir))
 
     camera = connect_camera()
-    poll_image(timeout=3000, camera=camera)
+    poll_image(timeout=3000, camera=camera, save_dir=save_dir)
 
     return 0
 
-def poll_image(timeout: int, camera: gp.Camera):
+def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
     while True:
         print(f"Waiting for image (timeout: {timeout})")
         try:
             event_type, event_data = camera.wait_for_event(timeout)
             if event_type == gp.GP_EVENT_FILE_ADDED:
                 cam_file = camera.file_get(event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
-                target_path = os.path.join(os.getcwd(), event_data.name.removeprefix("capt_"))
+                target_path = os.path.join(save_dir, event_data.name.removeprefix("capt_"))
                 save_image(image=cam_file, path=target_path)
                 
         except gp.GPhoto2Error as ex:
@@ -33,7 +41,7 @@ def poll_image(timeout: int, camera: gp.Camera):
             time.sleep(2)
             camera = connect_camera()
 
-def save_image(image: gp.CameraFile, path: os.path):
+def save_image(image: gp.CameraFile, path: Path):
     print(f"Image is being saved to {path}")
     image.save(path)
 

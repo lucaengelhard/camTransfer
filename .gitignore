@@ -1,3 +1,4 @@
 .venv
 *.ARW
 __pycache__
+data
