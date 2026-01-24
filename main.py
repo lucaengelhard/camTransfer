@@ -6,9 +6,13 @@ import argparse
 from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
-import getpass
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock, Thread
+import itertools
+import sys
+import time
 
+# Local modules
 import sftp
 import encryption
 
@@ -24,6 +28,9 @@ class Mode(Enum):
     DECRYPT = "decrypt"
 
 executor = ThreadPoolExecutor(max_workers=4)
+
+file_status = {}
+file_status_lock = Lock()
 
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
@@ -85,8 +92,9 @@ def args():
 def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, fernet: Fernet):
     global FLAG_UPLOAD, FLAG_OVERWRITE
 
+    spinner_thread = Thread(target=display_spinner, daemon=True)
+    spinner_thread.start()
     while True:
-        print(f"Waiting for image (timeout: {timeout})")
         try:
             event_type, event_data = camera.wait_for_event(timeout)
             if event_type == gp.GP_EVENT_FILE_ADDED:
@@ -118,20 +126,37 @@ def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fe
 
         if FLAG_ENCRYPT and not FLAG_DELETE_LOCAL:
             encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
+
+        with file_status_lock:
+            file_status[target_path.name] = "done"
             
     except Exception as e:
-        print(f"Job failed for {file_name}: {e}")
+        with file_status_lock:
+            file_status[target_path.name] = f"failed: {e}"
 
 def save_image(image: gp.CameraFile, path: Path):
     image.save(str(path))
-    print(f"Image saved to {path}")
 
 def upload_image(path: Path, upload_dir: Path):
+    with file_status_lock:
+        file_status[path.name] = "uploading"
     sftp.upload(path, os.path.join(upload_dir, path.name))
 
 def encrypt_image(path: Path, fernet: Fernet, overwrite: bool):
+    with file_status_lock:
+        file_status[path.name] = "encrypting"
     encryption.encrypt_file(path, fernet, overwrite)
-    print(f"Image at {path} encrypted")
+
+def display_spinner():
+    spinner_cycle = itertools.cycle(["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"])
+    while True:
+        spin_char = next(spinner_cycle)
+        with file_status_lock:
+            statuses = [f"{fname}: {status}" for fname, status in file_status.items() if status != "done"]
+        status_line = " | ".join(statuses) if statuses else "Waiting for image..."
+        sys.stdout.write(f"\r{spin_char} {status_line}        ")
+        sys.stdout.flush()
+        time.sleep(0.1)
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')

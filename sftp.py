@@ -55,9 +55,7 @@ def upload(source: Path, remote_path: str):
         return
 
     # Upload the file
-    print(f"Started upload of {source} to {remote_path}")
     sftp.put(str(source), remote_path)
-    print(f"Uploaded {source} to {remote_path}.")
     
 def list_remote(path: str = '.'):
     """
