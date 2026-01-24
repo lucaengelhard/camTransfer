@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
+import getpass
 
 import sftp
 import encryption

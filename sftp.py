@@ -4,6 +4,9 @@ import os
 from dotenv import load_dotenv
 from queue import Queue
 from threading import Thread, Event
+from collections.abc import Callable
+from getpass import getpass
+from typing import Optional
 
 sftp = None
 transport = None
@@ -14,12 +17,25 @@ stop_event = Event()
 
 def get_env():
     load_dotenv()
-    HOST = os.getenv("SFTP_HOST")
-    USER = os.getenv("SFTP_USER")
-    PASSWORD = os.getenv("SFTP_PASS")
-    PORT = int(os.getenv("SFTP_PORT", 22))
+    HOST = env("SFTP_HOST", prompt="Host")
+    USER = env("SFTP_USER", prompt="Username")
+    PASSWORD = env("SFTP_PASS", action=getpass, prompt="Password")
+    PORT = int(env("SFTP_PORT", prompt="Port", default="22"))
 
     return HOST, USER, PASSWORD, PORT
+
+def env(key: str, prompt: str, action: Callable[[str], str] = input, default: Optional[str] = None) -> str:
+    res = os.getenv(key)
+    while res is None or res == "":
+        if default is not None:
+            res = action(f"{prompt} ({default}): ")
+        else:
+            res = action(f"{prompt}: ")
+
+        if res == "" and default is not None:
+            res = default
+
+    return res
 
 def connect():
     """
