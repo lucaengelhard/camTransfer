@@ -25,7 +25,6 @@ def test_connection():
     
     transport.close()
 
-
 def upload(source: Path, remote_path: str):
     global HOST, USER, PASSWORD, PORT
     transport = paramiko.Transport((HOST, PORT))
