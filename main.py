@@ -5,13 +5,19 @@ import sys
 import argparse
 from pathlib import Path
 
+
+import sftp
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=Path, default=Path.cwd())
     args = parser.parse_args()
 
+
     if not args.dir.is_dir():
         parser.error(f"The path {args.dir} is not a valid directory.")
+
+    sftp.connect()
 
     # Set up dir
     save_dir = Path(os.path.join(os.getcwd(), args.dir))
@@ -28,8 +34,10 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
             event_type, event_data = camera.wait_for_event(timeout)
             if event_type == gp.GP_EVENT_FILE_ADDED:
                 cam_file = camera.file_get(event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
-                target_path = os.path.join(save_dir, event_data.name.removeprefix("capt_"))
+                file_name = event_data.name.removeprefix("capt_")
+                target_path = Path(os.path.join(save_dir, file_name))
                 save_image(image=cam_file, path=target_path)
+                upload_image(path=target_path)
                 
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
@@ -43,7 +51,11 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
 
 def save_image(image: gp.CameraFile, path: Path):
     print(f"Image is being saved to {path}")
-    image.save(path)
+    image.save(str(path))
+
+def upload_image(path: Path):
+    print(f"Image {path.name} is being uploaded")
+    sftp.upload(path, os.path.join("/uploads", path.name))
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')

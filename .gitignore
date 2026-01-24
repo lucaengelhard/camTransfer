@@ -2,3 +2,4 @@
 *.ARW
 __pycache__
 data
+.env
