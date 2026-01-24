@@ -4,40 +4,77 @@ import os
 import sys
 import argparse
 from pathlib import Path
-
+from cryptography.fernet import Fernet
+from enum import Enum
 
 import sftp
+import encryption
 
 # Globals
-FLAG_UPLOAD = True
+FLAG_UPLOAD = None
+FLAG_ENCRYPT = None
+FLAG_MODE = None
+FLAG_OVERWRITE = None
+
+class Mode(Enum):
+    STANDARD = "standard"
+    DECRYPT = "decrypt"
 
 def main():
-    global FLAG_UPLOAD
+    global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=Path, default=Path.cwd())
-    parser.add_argument("--upload", action=argparse.BooleanOptionalAction)
-    args = parser.parse_args()
+    save_dir, fernet = args()
 
-    if args.upload is not None:
-        FLAG_UPLOAD = args.upload
-
-    if not args.dir.is_dir():
-        parser.error(f"The path {args.dir} is not a valid directory.")
+    if FLAG_MODE is Mode.DECRYPT:
+        encryption.decrypt_dir(save_dir, fernet, FLAG_OVERWRITE)
+        return 0
 
     if FLAG_UPLOAD:
         sftp.connect()
 
-    # Set up dir
-    save_dir = Path(os.path.join(os.getcwd(), args.dir))
-
     camera = connect_camera()
-    poll_image(timeout=3000, camera=camera, save_dir=save_dir)  
+    poll_image(timeout=3000, camera=camera, save_dir=save_dir, fernet=fernet)  
 
     return 0
 
-def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
-    global FLAG_UPLOAD
+def args():
+    global FLAG_UPLOAD, FLAG_ENCRYPT, FLAG_MODE, FLAG_OVERWRITE
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", nargs="?", default=Mode.STANDARD, type=Mode)
+    parser.add_argument("--dir", type=Path, default=Path.cwd())
+    parser.add_argument("--upload", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--encrypt", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--key", type=Path, default="camtransfer.key")
+    parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
+
+    args = parser.parse_args()
+
+    FLAG_MODE = args.mode
+    FLAG_UPLOAD = args.upload
+    FLAG_ENCRYPT = args.encrypt
+    FLAG_OVERWRITE = args.overwrite
+    
+    if not args.dir.is_dir():
+        parser.error(f"The path {args.dir} is not a valid directory.")
+
+    save_dir = Path(os.path.join(os.getcwd(), args.dir))
+    fernet = None
+    
+    if FLAG_ENCRYPT or FLAG_MODE is Mode.DECRYPT:
+        if args.key.exists():
+            with open(args.key, "rb") as keyfile:
+                fernet = Fernet(keyfile.read())
+        else:
+            if FLAG_MODE is Mode.DECRYPT:
+                parser.error(f"No keyfile exists at {args.key} - please provide one")
+            print(f"No keyfile exists at {args.key}, creating one...")
+            fernet = encryption.create_key(args.key)
+
+    return save_dir, fernet
+
+def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, fernet: Fernet):
+    global FLAG_UPLOAD, FLAG_OVERWRITE
 
     while True:
         print(f"Waiting for image (timeout: {timeout})")
@@ -51,6 +88,9 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
                 if FLAG_UPLOAD: 
                     upload_image(path=target_path)
                 
+                if FLAG_ENCRYPT:
+                    encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
+                
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
             try:
@@ -62,12 +102,16 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
             camera = connect_camera()
 
 def save_image(image: gp.CameraFile, path: Path):
-    print(f"Image is being saved to {path}")
     image.save(str(path))
+    print(f"Image saved to {path}")
 
 def upload_image(path: Path):
     print(f"Image {path.name} is being uploaded")
     sftp.upload(path, os.path.join("/uploads", path.name))
+
+def encrypt_image(path: Path, fernet: Fernet, overwrite: bool):
+    encryption.encrypt_file(path, fernet, overwrite)
+    print(f"Image at {path} encrypted")
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')
