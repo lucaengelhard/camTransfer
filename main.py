@@ -7,7 +7,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
 import getpass
-from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 
 import sftp
 import encryption
@@ -21,6 +21,8 @@ FLAG_OVERWRITE = None
 class Mode(Enum):
     STANDARD = "standard"
     DECRYPT = "decrypt"
+
+executor = ThreadPoolExecutor(max_workers=4)
 
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
@@ -91,12 +93,7 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path
                 target_path = save_dir / file_name
 
                 save_image(image=cam_file, path=target_path)           
-
-                Thread(
-                    target=handle_image,
-                    args=(target_path, save_dir, upload_dir, fernet),
-                    daemon=True
-                ).start()
+                executor.submit(handle_image, target_path, save_dir, upload_dir, fernet)
                 
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
