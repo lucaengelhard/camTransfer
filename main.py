@@ -2,6 +2,9 @@ import gphoto2 as gp
 import time
 import os
 import sys
+import argparse
+import encryption
+from pathlib import Path
 
 def main():
     # Set up dir
@@ -67,5 +70,26 @@ def get_camera_name(camera: gp.Camera) -> str:
 
     return camera_model
 
+def path_or_none(value):
+    """Custom type function for argparse: accepts empty or a valid file path."""
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid file path")
+    return path
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--key",
+        type=path_or_none,
+        default=None,
+        help="What key to use, if empty generates a new one"
+    )
+    args = parser.parse_args()
+
+    key = encryption.get_key(args.key)
+    print(key)
+    
     sys.exit(main())
