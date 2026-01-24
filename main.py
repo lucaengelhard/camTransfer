@@ -17,6 +17,7 @@ FLAG_UPLOAD = None
 FLAG_ENCRYPT = None
 FLAG_MODE = None
 FLAG_OVERWRITE = None
+FLAG_DELETE_LOCAL = None
 
 class Mode(Enum):
     STANDARD = "standard"
@@ -42,16 +43,17 @@ def main():
     return 0
 
 def args():
-    global FLAG_UPLOAD, FLAG_ENCRYPT, FLAG_MODE, FLAG_OVERWRITE
+    global FLAG_UPLOAD, FLAG_ENCRYPT, FLAG_MODE, FLAG_OVERWRITE, FLAG_DELETE_LOCAL
 
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", nargs="?", default=Mode.STANDARD, type=Mode)
     parser.add_argument("--dir", type=Path, default=Path.cwd())
+    parser.add_argument("--key", type=Path, default="camtransfer.key")
+    parser.add_argument("--upload-dir", type=Path, default="/uploads")
+    parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--deletelocal", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--upload", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--encrypt", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--key", type=Path, default="camtransfer.key")
-    parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--upload-dir", type=Path, default="/uploads")
 
     args = parser.parse_args()
 
@@ -59,6 +61,7 @@ def args():
     FLAG_UPLOAD = args.upload
     FLAG_ENCRYPT = args.encrypt
     FLAG_OVERWRITE = args.overwrite
+    FLAG_DELETE_LOCAL = args.deletelocal and args.upload
     
     if not args.dir.is_dir():
         parser.error(f"The path {args.dir} is not a valid directory.")
@@ -109,8 +112,11 @@ def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fe
     try:
         if FLAG_UPLOAD:
             upload_image(path=target_path, upload_dir=upload_dir)
+        
+        if FLAG_DELETE_LOCAL:
+            os.remove(target_path)
 
-        if FLAG_ENCRYPT:
+        if FLAG_ENCRYPT and not FLAG_DELETE_LOCAL:
             encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
             
     except Exception as e:
