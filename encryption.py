@@ -36,7 +36,6 @@ def decrypt_file(path: Path, fernet: Fernet, overwrite: bool):
 
     removed_enc_path = path.with_suffix("") if path.suffix == Suffix.ENC.value else path
     target_path = removed_enc_path if overwrite else removed_enc_path.with_name(removed_enc_path.name + Suffix.DEC.value)
-    print(target_path)
     with open(target_path, 'wb') as f:
         f.write(decrypted)
 
