@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "always"
+  }
+}
