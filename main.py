@@ -9,25 +9,6 @@ def main():
     os.makedirs(save_dir, exist_ok=True)
 
     camera = connect_camera()
-    """     timeout = 3000  # milliseconds
-    while True:
-        try:
-            event_type, event_data = camera.wait_for_event(timeout)
-            if event_type == gp.GP_EVENT_FILE_ADDED:
-                cam_file = camera.file_get(
-                    event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
-                target_path = os.path.join(os.getcwd(), event_data.name)
-                print("Image is being saved to {}".format(target_path))
-                cam_file.save(target_path)
-        except gp.GPhoto2Error as ex:
-            print(f"Camera error: {ex}. Attempting to reconnect...")
-            try:
-                camera.exit()
-            except Exception:
-                pass
-
-            time.sleep(2)
-            camera = connect_camera() """
     poll_image(timeout=3000, camera=camera)
 
     return 0
@@ -39,10 +20,9 @@ def poll_image(timeout: int, camera: gp.Camera):
             event_type, event_data = camera.wait_for_event(timeout)
             if event_type == gp.GP_EVENT_FILE_ADDED:
                 cam_file = camera.file_get(event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
-                target_path = os.path.join(os.getcwd(), event_data.name)
-                print("Image is being saved to {}".format(target_path))
-                cam_file.save(target_path)
-
+                target_path = os.path.join(os.getcwd(), event_data.name.removeprefix("capt_"))
+                save_image(image=cam_file, path=target_path)
+                
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
             try:
@@ -52,7 +32,10 @@ def poll_image(timeout: int, camera: gp.Camera):
 
             time.sleep(2)
             camera = connect_camera()
-        
+
+def save_image(image: gp.CameraFile, path: os.path):
+    print(f"Image is being saved to {path}")
+    image.save(path)
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')
