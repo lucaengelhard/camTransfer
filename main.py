@@ -7,6 +7,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
 import getpass
+from threading import Thread
 
 import sftp
 import encryption
@@ -24,7 +25,7 @@ class Mode(Enum):
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
 
-    save_dir, fernet = args()
+    save_dir, fernet, upload_dir = args()
 
     if FLAG_MODE is Mode.DECRYPT:
         encryption.decrypt_dir(save_dir, fernet, FLAG_OVERWRITE)
@@ -34,7 +35,7 @@ def main():
         sftp.connect()
 
     camera = connect_camera()
-    poll_image(timeout=3000, camera=camera, save_dir=save_dir, fernet=fernet)  
+    poll_image(timeout=3000, camera=camera, save_dir=save_dir, fernet=fernet, upload_dir=upload_dir)  
 
     return 0
 
@@ -48,6 +49,7 @@ def args():
     parser.add_argument("--encrypt", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--key", type=Path, default="camtransfer.key")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--upload-dir", type=Path, default="/uploads")
 
     args = parser.parse_args()
 
@@ -61,6 +63,7 @@ def args():
 
     save_dir = Path(os.path.join(os.getcwd(), args.dir))
     fernet = None
+    upload_dir = args.upload_dir
     
     if FLAG_ENCRYPT or FLAG_MODE is Mode.DECRYPT:
         if args.key.exists():
@@ -72,9 +75,9 @@ def args():
             print(f"No keyfile exists at {args.key}, creating one...")
             fernet = encryption.create_key(args.key)
 
-    return save_dir, fernet
+    return save_dir, fernet, upload_dir
 
-def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, fernet: Fernet):
+def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, fernet: Fernet):
     global FLAG_UPLOAD, FLAG_OVERWRITE
 
     while True:
@@ -82,15 +85,18 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, fernet: Fernet):
         try:
             event_type, event_data = camera.wait_for_event(timeout)
             if event_type == gp.GP_EVENT_FILE_ADDED:
-                cam_file = camera.file_get(event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
                 file_name = event_data.name.removeprefix("capt_")
-                target_path = Path(os.path.join(save_dir, file_name))
-                save_image(image=cam_file, path=target_path)
-                if FLAG_UPLOAD: 
-                    upload_image(path=target_path)
-                
-                if FLAG_ENCRYPT:
-                    encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
+                cam_file = camera.file_get(event_data.folder, event_data.name, gp.GP_FILE_TYPE_NORMAL)
+
+                target_path = save_dir / file_name
+
+                save_image(image=cam_file, path=target_path)           
+
+                Thread(
+                    target=handle_image,
+                    args=(target_path, save_dir, upload_dir, fernet),
+                    daemon=True
+                ).start()
                 
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
@@ -102,13 +108,23 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, fernet: Fernet):
             time.sleep(2)
             camera = connect_camera()
 
+def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fernet):
+    try:
+        if FLAG_UPLOAD:
+            upload_image(path=target_path, upload_dir=upload_dir)
+
+        if FLAG_ENCRYPT:
+            encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
+            
+    except Exception as e:
+        print(f"Job failed for {file_name}: {e}")
+
 def save_image(image: gp.CameraFile, path: Path):
     image.save(str(path))
     print(f"Image saved to {path}")
 
-def upload_image(path: Path):
-    print(f"Image {path.name} is being uploaded")
-    sftp.upload(path, os.path.join("/uploads", path.name))
+def upload_image(path: Path, upload_dir: Path):
+    sftp.upload(path, os.path.join(upload_dir, path.name))
 
 def encrypt_image(path: Path, fernet: Fernet, overwrite: bool):
     encryption.encrypt_file(path, fernet, overwrite)
