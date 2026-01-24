@@ -8,26 +8,37 @@ from pathlib import Path
 
 import sftp
 
+# Globals
+FLAG_UPLOAD = True
+
 def main():
+    global FLAG_UPLOAD
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=Path, default=Path.cwd())
+    parser.add_argument("--upload", action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
+    if args.upload is not None:
+        FLAG_UPLOAD = args.upload
 
     if not args.dir.is_dir():
         parser.error(f"The path {args.dir} is not a valid directory.")
 
-    sftp.connect()
+    if FLAG_UPLOAD:
+        sftp.connect()
 
     # Set up dir
     save_dir = Path(os.path.join(os.getcwd(), args.dir))
 
     camera = connect_camera()
-    poll_image(timeout=3000, camera=camera, save_dir=save_dir)
+    poll_image(timeout=3000, camera=camera, save_dir=save_dir)  
 
     return 0
 
 def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
+    global FLAG_UPLOAD
+
     while True:
         print(f"Waiting for image (timeout: {timeout})")
         try:
@@ -37,7 +48,8 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path):
                 file_name = event_data.name.removeprefix("capt_")
                 target_path = Path(os.path.join(save_dir, file_name))
                 save_image(image=cam_file, path=target_path)
-                upload_image(path=target_path)
+                if FLAG_UPLOAD: 
+                    upload_image(path=target_path)
                 
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")

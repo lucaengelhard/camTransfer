@@ -25,10 +25,10 @@ def connect():
     """
     Establish an SFTP connection.
     """
+    global sftp, transport, upload_thread
 
     HOST, USER, PASSWORD, PORT = get_env()
 
-    global sftp, transport, upload_thread
     transport = paramiko.Transport((HOST, PORT))
     transport.connect(username=USER, password=PASSWORD)
     sftp = paramiko.SFTPClient.from_transport(transport)
