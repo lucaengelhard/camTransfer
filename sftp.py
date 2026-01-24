@@ -28,6 +28,7 @@ def connect():
     sftp = paramiko.SFTPClient.from_transport(transport)
     print(f"Connected to {HOST} via SFTP.")
 
+# TODO: create queue, so that upload isn't blocking
 def upload(source: Path, remote_path: str):
     """
     Upload a local file to the remote server.
