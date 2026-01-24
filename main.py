@@ -148,4 +148,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
+        # TODO: cleanup any running saves and uploads
         print("\nProgram terminated by user.")
