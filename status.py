@@ -7,6 +7,7 @@ file_status_lock = Lock()
 
 class Stage(Enum):
     SAVING = "Saving"
+    WAITING = "Waiting for Thread"
     UPLOADING = "Uploading"
     ENCRYPTING = "Encrypting"
     DONE = "Done"

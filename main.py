@@ -102,7 +102,8 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path
 
                 target_path = save_dir / file_name
 
-                save_image(image=cam_file, path=target_path)           
+                save_image(image=cam_file, path=target_path)
+                file_status_set(file_name, Stage.WAITING)     
                 executor.submit(handle_image, target_path, save_dir, upload_dir, fernet)
                 
         except gp.GPhoto2Error as ex:
