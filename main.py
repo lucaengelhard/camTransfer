@@ -4,7 +4,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
-from cryptography.fernet import Fernet
+from Crypto.PublicKey import RSA
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
@@ -28,6 +28,7 @@ FLAG_DELETE_LOCAL = None
 class Mode(Enum):
     STANDARD = "standard"
     DECRYPT = "decrypt"
+    CREATE_KEYS = "create-keys"
 
 executor = ThreadPoolExecutor(max_workers=4)
 spinner_thread = Thread(target=cli.cli, daemon=True)
@@ -35,17 +36,20 @@ spinner_thread = Thread(target=cli.cli, daemon=True)
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
 
-    save_dir, fernet, upload_dir = args()
+    save_dir, upload_dir, public_key, private_key = args()
+
+    if FLAG_MODE is Mode.CREATE_KEYS:
+        return 0
 
     if FLAG_MODE is Mode.DECRYPT:
-        encryption.decrypt_dir(save_dir, fernet, FLAG_OVERWRITE)
+        encryption.decrypt_dir(save_dir, private_key, FLAG_OVERWRITE)
         return 0
 
     if FLAG_UPLOAD:
         sftp.test_connection()
 
     camera = connect_camera()
-    poll_image(timeout=3000, camera=camera, save_dir=save_dir, fernet=fernet, upload_dir=upload_dir)  
+    poll_image(timeout=3000, camera=camera, save_dir=save_dir, public_key=public_key, upload_dir=upload_dir)  
 
     return 0
 
@@ -56,6 +60,8 @@ def args():
     parser.add_argument("mode", nargs="?", default=Mode.STANDARD, type=Mode, help=" | ".join([m.value for m in Mode]))
     parser.add_argument("--dir", type=Path, default=Path.cwd(), help="Set target directory (defaults to current working directory)")
     parser.add_argument("--key", type=Path, default="camtransfer.key", help="Set path to keyfile (defaults to camtransfer.key)")
+    parser.add_argument("--private-key", type=Path, default="camtransfer.priv", help="Set path to public key (defaults to camtransfer.pub)")
+    parser.add_argument("--public-key", type=Path, default="camtransfer.pub", help="Set path to private key (defaults to camtransfer.priv)")
     parser.add_argument("--upload-dir", type=Path, default="/uploads", help="Set target directory on the remote")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--deletelocal", action=argparse.BooleanOptionalAction, default=False)
@@ -74,22 +80,28 @@ def args():
         parser.error(f"The path {args.dir} is not a valid directory.")
 
     save_dir = Path(os.path.join(os.getcwd(), args.dir))
-    fernet = None
     upload_dir = args.upload_dir
-    
-    if FLAG_ENCRYPT or FLAG_MODE is Mode.DECRYPT:
-        if args.key.exists():
-            with open(args.key, "rb") as keyfile:
-                fernet = Fernet(keyfile.read())
+    public_key = None
+    private_key = None
+
+    if FLAG_MODE is Mode.STANDARD and FLAG_ENCRYPT:
+        if args.public_key.exists():
+            public_key = encryption.get_key(args.public_key)
         else:
-            if FLAG_MODE is Mode.DECRYPT:
-                parser.error(f"No keyfile exists at {args.key} - please provide one")
-            print(f"No keyfile exists at {args.key}, creating one...")
-            fernet = encryption.create_key(args.key)
+            parser.error(f"No public key at {args.public_key}")
 
-    return save_dir, fernet, upload_dir
+    if FLAG_MODE is Mode.DECRYPT:
+        if args.private_key.exists():
+            private_key = encryption.get_key(args.public_key)
+        else:
+            parser.error(f"No public key at {args.public_key}")
 
-def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, fernet: Fernet):
+    if FLAG_MODE is Mode.CREATE_KEYS:
+        encryption.create_keys(public=args.public_key, private=args.private_key)
+
+    return save_dir, upload_dir, public_key, private_key
+
+def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, public_key: RSA.RsaKey):
     global FLAG_UPLOAD, FLAG_OVERWRITE
     spinner_thread.start()
 
@@ -104,7 +116,7 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path
 
                 save_image(image=cam_file, path=target_path)
                 file_status_set(file_name, Stage.WAITING)     
-                executor.submit(handle_image, target_path, save_dir, upload_dir, fernet)
+                executor.submit(handle_image, target_path, upload_dir, public_key)
                 
         except gp.GPhoto2Error as ex:
             print(f"Camera error: {ex}. Attempting to reconnect...")
@@ -116,7 +128,7 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path
             time.sleep(2)
             camera = connect_camera()
 
-def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fernet):
+def handle_image(target_path: Path, upload_dir: Path, public_key: RSA.RsaKey):
     try:
         if FLAG_UPLOAD:
             upload_image(path=target_path, upload_dir=upload_dir)
@@ -125,7 +137,8 @@ def handle_image(target_path: Path, save_dir: Path, upload_dir: Path, fernet: Fe
             os.remove(target_path)
 
         if FLAG_ENCRYPT and not FLAG_DELETE_LOCAL:
-            encrypt_image(path=target_path, fernet=fernet, overwrite=FLAG_OVERWRITE)
+            file_status_set(target_path.name, Stage.ENCRYPTING)
+            encryption.encrypt(path=target_path, overwrite=FLAG_OVERWRITE, public_key=public_key)
 
         file_status_set(target_path.name, Stage.DONE, 100)
                 
@@ -138,10 +151,6 @@ def save_image(image: gp.CameraFile, path: Path):
 
 def upload_image(path: Path, upload_dir: Path):
     sftp.upload(path, os.path.join(upload_dir, path.name))
-
-def encrypt_image(path: Path, fernet: Fernet, overwrite: bool):
-    file_status_set(path.name, Stage.ENCRYPTING)
-    encryption.encrypt_file(path, fernet, overwrite)
 
 def connect_camera() -> gp.Camera:
     print('Please connect and switch on your camera...')
