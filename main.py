@@ -7,7 +7,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
-from threading import  Thread
+from threading import Thread
 import itertools
 import sys
 import time
@@ -30,8 +30,7 @@ class Mode(Enum):
     DECRYPT = "decrypt"
 
 executor = ThreadPoolExecutor(max_workers=4)
-
-
+spinner_thread = Thread(target=cli.cli, daemon=True)
 
 def main():
     global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE
@@ -92,9 +91,8 @@ def args():
 
 def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path, fernet: Fernet):
     global FLAG_UPLOAD, FLAG_OVERWRITE
-
-    spinner_thread = Thread(target=cli.display_spinner, daemon=True)
     spinner_thread.start()
+
     while True:
         try:
             event_type, event_data = camera.wait_for_event(timeout)
@@ -178,5 +176,10 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        # TODO: cleanup any running saves and uploads
+        print("\n Shutting down...")
+
+        executor.shutdown(wait=True)
+        cli.stop_event.set()
+        spinner_thread.join()
+        
         print("\nProgram terminated by user.")
