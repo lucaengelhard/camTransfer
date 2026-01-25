@@ -188,7 +188,9 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n Shutting down...")
 
+        print("Stopping Workers...")
         executor.shutdown(wait=True)
+
         cli.stop_event.set()
         spinner_thread.join()
         

@@ -11,6 +11,8 @@ class Suffix(Enum):
     ENC = ".enc"
     DEC = ".dec"
 
+PREFIX = b"__camtransfer__\n"
+
 def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
     with open(path, 'rb') as f:
         data = f.read()
@@ -23,6 +25,7 @@ def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
 
     output_path = path.with_name(path.name + Suffix.ENC.value)
     with open(output_path, "wb") as f:
+        f.write(PREFIX)
         f.write(enc_session_key)
         f.write(cipher_aes.nonce)
         f.write(tag)
@@ -33,6 +36,10 @@ def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
 
 def decrypt(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
     with open(path, "rb") as f:
+        prefix = f.read(len(PREFIX))
+        if prefix != PREFIX:
+            raise ValueError("Not a camtransfer encrypted file")
+    
         enc_session_key = f.read(private_key.size_in_bytes())
         nonce = f.read(16)
         tag = f.read(16)
@@ -59,12 +66,21 @@ def decrypt(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
 
 def decrypt_dir(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
     for file_path in path.iterdir():
-        if file_path.is_file() and file_path.suffix == ".enc":
-            try:
-                decrypt(file_path, private_key, overwrite)
-                print(f"Decrypted: {file_path}")
-            except Exception as ex:
-                print(ex)
+        if not file_path.is_file():
+            continue
+
+        try:
+            with open(file_path, "rb") as f:
+                if f.read(len(PREFIX)) != PREFIX:
+                    continue
+        except:
+            continue
+        
+        try:
+            decrypt(file_path, private_key, overwrite)
+            print(f"Decrypted: {file_path}")
+        except Exception as ex:
+            print(ex)
                 
 def get_key(path: Path):
     with open(path, "rb") as keyfile:
