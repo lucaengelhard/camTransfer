@@ -53,10 +53,10 @@ def args():
     global FLAG_UPLOAD, FLAG_ENCRYPT, FLAG_MODE, FLAG_OVERWRITE, FLAG_DELETE_LOCAL
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", nargs="?", default=Mode.STANDARD, type=Mode)
-    parser.add_argument("--dir", type=Path, default=Path.cwd())
-    parser.add_argument("--key", type=Path, default="camtransfer.key")
-    parser.add_argument("--upload-dir", type=Path, default="/uploads")
+    parser.add_argument("mode", nargs="?", default=Mode.STANDARD, type=Mode, help=" | ".join([m.value for m in Mode]))
+    parser.add_argument("--dir", type=Path, default=Path.cwd(), help="Set target directory (defaults to current working directory)")
+    parser.add_argument("--key", type=Path, default="camtransfer.key", help="Set path to keyfile (defaults to camtransfer.key)")
+    parser.add_argument("--upload-dir", type=Path, default="/uploads", help="Set target directory on the remote")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--deletelocal", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--upload", action=argparse.BooleanOptionalAction, default=True)
