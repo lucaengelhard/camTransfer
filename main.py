@@ -2,12 +2,9 @@ import gphoto2 as gp
 import time
 import os
 import sys
-import argparse
 from pathlib import Path
 from Crypto.PublicKey import RSA
 from enum import Enum
-from concurrent.futures import ThreadPoolExecutor
-from threading import Thread
 import itertools
 import sys
 import time
@@ -24,42 +21,25 @@ from sidecar import (
     get_key_value,
     write_sidecar,
 )
-
-# Globals
-FLAG_UPLOAD = None
-FLAG_ENCRYPT = None
-FLAG_MODE = None
-FLAG_OVERWRITE = None
-FLAG_DELETE_LOCAL = None
-FLAG_HANDLE_UNFINISHED = None
-
-
-class Mode(Enum):
-    STANDARD = "standard"
-    DECRYPT = "decrypt"
-    CREATE_KEYS = "create-keys"
-
-
-executor = ThreadPoolExecutor(max_workers=4)
-spinner_thread = Thread(target=cli.cli, daemon=True)
-
+from global_values import FLAGS, FlagType, Mode
+from threads import executor, spinner_thread
 
 def main():
-    global FLAG_UPLOAD, FLAG_MODE, FLAG_OVERWRITE, FLAG_HANDLE_UNFINISHED
+    global FLAGS
 
-    save_dir, upload_dir, public_key, private_key = args()
+    save_dir, upload_dir, public_key, private_key = cli.args()
 
-    if FLAG_MODE is Mode.CREATE_KEYS:
+    if FLAGS[FlagType.MODE] is Mode.CREATE_KEYS:
         return 0
 
-    if FLAG_MODE is Mode.DECRYPT:
-        encryption.decrypt_dir(save_dir, private_key, FLAG_OVERWRITE)
+    if FLAGS[FlagType.MODE] is Mode.DECRYPT:
+        encryption.decrypt_dir(save_dir, private_key, FLAGS[FlagType.OVERWRITE])
         return 0
 
-    if FLAG_UPLOAD:
+    if FLAGS[FlagType.UPLOAD]:
         sftp.test_connection()
 
-    if FLAG_HANDLE_UNFINISHED:
+    if FLAGS[FlagType.HANDLE_UNFINISHED]:
         handle_unfinished(save_dir, upload_dir, public_key)
 
     camera = connect_camera()
@@ -74,96 +54,6 @@ def main():
     return 0
 
 
-def args():
-    global FLAG_UPLOAD, FLAG_ENCRYPT, FLAG_MODE, FLAG_OVERWRITE, FLAG_DELETE_LOCAL, FLAG_HANDLE_UNFINISHED
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "mode",
-        nargs="?",
-        default=Mode.STANDARD,
-        type=Mode,
-        help=" | ".join([m.value for m in Mode]),
-    )
-    parser.add_argument(
-        "--dir",
-        type=Path,
-        default=Path.cwd(),
-        help="Set target directory (defaults to current working directory)",
-    )
-    parser.add_argument(
-        "--key",
-        type=Path,
-        default="camtransfer.key",
-        help="Set path to keyfile (defaults to camtransfer.key)",
-    )
-    parser.add_argument(
-        "--private-key",
-        type=Path,
-        default="camtransfer.priv",
-        help="Set path to public key (defaults to camtransfer.pub)",
-    )
-    parser.add_argument(
-        "--public-key",
-        type=Path,
-        default="camtransfer.pub",
-        help="Set path to private key (defaults to camtransfer.priv)",
-    )
-    parser.add_argument(
-        "--upload-dir",
-        type=Path,
-        default="/uploads",
-        help="Set target directory on the remote",
-    )
-    parser.add_argument(
-        "--unfinished", action=argparse.BooleanOptionalAction, default=True
-    )
-    parser.add_argument(
-        "--overwrite", action=argparse.BooleanOptionalAction, default=False
-    )
-    parser.add_argument(
-        "--deletelocal", action=argparse.BooleanOptionalAction, default=False
-    )
-    parser.add_argument("--upload", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument(
-        "--encrypt", action=argparse.BooleanOptionalAction, default=False
-    )
-
-    args = parser.parse_args()
-
-    FLAG_MODE = args.mode
-    FLAG_UPLOAD = args.upload
-    FLAG_ENCRYPT = args.encrypt
-    FLAG_OVERWRITE = args.overwrite
-    FLAG_DELETE_LOCAL = args.deletelocal and args.upload
-    FLAG_HANDLE_UNFINISHED = args.unfinished
-
-    if not args.dir.is_dir():
-        parser.error(f"The path {args.dir} is not a valid directory.")
-
-    save_dir = Path(os.path.join(os.getcwd(), args.dir))
-    upload_dir = args.upload_dir
-    public_key = None
-    private_key = None
-
-    if FLAG_MODE is Mode.STANDARD and FLAG_ENCRYPT:
-        if args.public_key.exists():
-            public_key = encryption.get_key(args.public_key)
-        else:
-            parser.error(f"No public key at {args.public_key}")
-
-    if FLAG_MODE is Mode.DECRYPT:
-        if args.private_key.exists():
-            private_key = encryption.get_key(args.public_key)
-        else:
-            parser.error(f"No public key at {args.public_key}")
-
-    if FLAG_MODE is Mode.CREATE_KEYS:
-        encryption.create_keys(public=args.public_key, private=args.private_key)
-
-    return save_dir, upload_dir, public_key, private_key
-
-
 def poll_image(
     timeout: int,
     camera: gp.Camera,
@@ -171,7 +61,7 @@ def poll_image(
     upload_dir: Path,
     public_key: RSA.RsaKey,
 ):
-    global FLAG_UPLOAD, FLAG_OVERWRITE
+    global FLAGS
     spinner_thread.start()
 
     while True:
@@ -203,17 +93,19 @@ def poll_image(
 
 def handle_image(target_path: Path, upload_dir: Path, public_key: RSA.RsaKey):
     try:
-        if FLAG_UPLOAD:
+        if FLAGS[FlagType.UPLOAD]:
             upload_image(path=target_path, upload_dir=upload_dir)
 
-        if FLAG_DELETE_LOCAL:
+        if FLAGS[FlagType.DELETE_LOCAL]:
             os.remove(target_path)
 
-        if FLAG_ENCRYPT and not FLAG_DELETE_LOCAL:
+        if FLAGS[FlagType.ENCRYPT] and not FLAGS[FlagType.DELETE_LOCAL]:
             write_sidecar(target_path, ("status", Stage.ENCRYPTING))
             file_status_set(target_path.name, Stage.ENCRYPTING)
             encryption.encrypt(
-                path=target_path, overwrite=FLAG_OVERWRITE, public_key=public_key
+                path=target_path,
+                overwrite=FLAGS[FlagType.OVERWRITE],
+                public_key=public_key,
             )
 
         write_sidecar(target_path, ("status", Stage.DONE))
