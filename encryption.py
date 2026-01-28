@@ -7,11 +7,13 @@ from pathlib import Path
 import os
 from enum import Enum
 
+import global_values
+
 class Suffix(Enum):
     ENC = ".enc"
     DEC = ".dec"
 
-PREFIX = b"__camtransfer__\n"
+PREFIX = bytes(f"{global_values.PREFIX}\n".encode("UTF8"))
 
 def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
     with open(path, 'rb') as f:

@@ -12,7 +12,7 @@ from rich.align import Align
 from threading import Event
 
 from status import file_status, file_status_lock, Stage
-from global_values import FLAGS, FlagType, Mode
+from global_values import FLAGS, FlagType, Mode, PREFIX
 
 stop_event = Event()
 
@@ -91,6 +91,7 @@ def args():
         default="/uploads",
         help="Set target directory on the remote",
     )
+    parser.add_argument("--file-prefix", default="__camtransfer__", type=str)
     parser.add_argument(
         "--unfinished", action=argparse.BooleanOptionalAction, default=True
     )
@@ -113,6 +114,8 @@ def args():
     FLAGS[FlagType.OVERWRITE] = args.overwrite
     FLAGS[FlagType.DELETE_LOCAL] = args.deletelocal and args.upload
     FLAGS[FlagType.HANDLE_UNFINISHED] = args.unfinished
+
+    PREFIX = args.file_prefix
 
     if not args.dir.is_dir():
         parser.error(f"The path {args.dir} is not a valid directory.")

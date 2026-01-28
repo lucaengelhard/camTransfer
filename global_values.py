@@ -22,3 +22,5 @@ class Mode(Enum):
     STANDARD = "standard"
     DECRYPT = "decrypt"
     CREATE_KEYS = "create-keys"
+
+PREFIX = "__camtransfer__"
