@@ -114,6 +114,7 @@ def poll_image(timeout: int, camera: gp.Camera, save_dir: Path, upload_dir: Path
 
                 target_path = save_dir / file_name
 
+                create_sidecar_file(target_path)
                 save_image(image=cam_file, path=target_path)
                 file_status_set(file_name, Stage.WAITING)     
                 executor.submit(handle_image, target_path, upload_dir, public_key)
@@ -141,9 +142,25 @@ def handle_image(target_path: Path, upload_dir: Path, public_key: RSA.RsaKey):
             encryption.encrypt(path=target_path, overwrite=FLAG_OVERWRITE, public_key=public_key)
 
         file_status_set(target_path.name, Stage.DONE, 100)
+
+        os.remove(get_sidecar_file_path(target_path))
                 
     except Exception as e:
         file_status_set(target_path.name, Stage.FAILED)
+
+def get_sidecar_file_path(path: Path):
+    file_path = path.with_name(path.name + ".lock")
+    return file_path
+
+def create_sidecar_file(path: Path):
+    sidecar_path = get_sidecar_file_path(path)
+    if sidecar_path.exists():
+        return sidecar_path
+    
+    with open(sidecar_path, "w") as f:
+        f.write(path.name)
+
+    return sidecar_path
 
 def save_image(image: gp.CameraFile, path: Path):
     file_status_set(path.name, Stage.SAVING)
