@@ -64,7 +64,7 @@ def args():
     parser.add_argument(
         "--dir",
         type=Path,
-        default=Path.cwd(),
+        default="data",
         help="Set target directory (defaults to current working directory)",
     )
     parser.add_argument(

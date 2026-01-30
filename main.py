@@ -108,7 +108,6 @@ def handle_image(target_path: Path, upload_dir: Path, public_key: RSA.RsaKey):
                 public_key=public_key,
             )
 
-        write_sidecar(target_path, ("status", Stage.DONE))
         file_status_set(target_path.name, Stage.DONE, 100)
 
         os.remove(get_sidecar_file_path(target_path))
