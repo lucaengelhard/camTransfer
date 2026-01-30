@@ -16,7 +16,6 @@ import encryption
 import cli
 from status import file_status, file_status_lock, file_status_set, Stage
 from sidecar import (
-    create_sidecar_file,
     get_sidecar_file_path,
     get_key_value,
     write_sidecar,

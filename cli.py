@@ -124,6 +124,8 @@ def args():
     upload_dir = args.upload_dir
     public_key = None
     private_key = None
+    
+    os.makedirs(save_dir, exist_ok=True)
 
     if FLAGS[FlagType.MODE] is Mode.STANDARD and FLAGS[FlagType.ENCRYPT]:
         if args.public_key.exists():

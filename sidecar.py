@@ -6,16 +6,6 @@ def get_sidecar_file_path(path: Path):
     file_path = path.with_name(path.name + ".lock")
     return file_path
 
-def create_sidecar_file(path: Path):
-    sidecar_path = get_sidecar_file_path(path)
-    if sidecar_path.exists():
-        return sidecar_path
-    
-    with open(sidecar_path, "w") as f:
-        f.write(path.name)
-
-    return sidecar_path
-
 def write_sidecar(path: Path, data: Tuple[str, str]):
     sidecar_path = get_sidecar_file_path(path)
     
