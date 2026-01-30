@@ -113,7 +113,7 @@ def handle_image(target_path: Path, upload_dir: Path, public_key: RSA.RsaKey):
         os.remove(get_sidecar_file_path(target_path))
 
     except Exception as e:
-        write_sidecar(target_path, ("stage", Stage.FAILED))
+        write_sidecar(target_path, ("status", Stage.FAILED))
         write_sidecar(target_path, ("reason", e))
         file_status_set(target_path.name, Stage.FAILED)
 

@@ -4,9 +4,11 @@ import os
 
 from status import file_status, file_status_lock, file_status_set, Stage
 from env import get_env
+from sidecar import write_sidecar
 
 
 HOST, USER, PASSWORD, PORT = get_env()
+
 
 def test_connection():
     global HOST, USER, PASSWORD, PORT
@@ -22,8 +24,9 @@ def test_connection():
         return True
     finally:
         sftp.close()
-    
+
     transport.close()
+
 
 def upload(source: Path, remote_path: str):
     global HOST, USER, PASSWORD, PORT
@@ -38,7 +41,9 @@ def upload(source: Path, remote_path: str):
         sftp.put(str(source), remote_path, callback=progress_callback)
         file_status_set(source.name, Stage.UPLOADING, 100)
     except Exception as e:
-        pass
+        file_status_set(source.name, Stage.FAILED)
+        write_sidecar(source, ("status", Stage.FAILED))
+        write_sidecar(source, ("reason", e))
     finally:
         sftp.close()
         transport.close()
