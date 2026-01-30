@@ -23,6 +23,7 @@ from sidecar import (
 from global_values import FLAGS, FlagType, Mode
 from threads import executor, spinner_thread
 
+
 def main():
     global FLAGS
 

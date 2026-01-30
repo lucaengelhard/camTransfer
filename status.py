@@ -5,6 +5,7 @@ from typing import Optional
 file_status = {}
 file_status_lock = Lock()
 
+
 class Stage(Enum):
     SAVING = "Saving"
     WAITING = "Waiting for Thread"
@@ -13,9 +14,7 @@ class Stage(Enum):
     DONE = "Done"
     FAILED = "Failed"
 
+
 def file_status_set(filename: str, stage: Stage, progress: Optional[int] = None):
     with file_status_lock:
-        file_status[filename] = {
-            "stage": stage,
-            "progress": progress
-        }
+        file_status[filename] = {"stage": stage, "progress": progress}

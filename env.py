@@ -4,6 +4,7 @@ from getpass import getpass
 from typing import Optional
 import os
 
+
 def get_env():
     load_dotenv()
     HOST = env("SFTP_HOST", prompt="Host")
@@ -13,7 +14,13 @@ def get_env():
 
     return HOST, USER, PASSWORD, PORT
 
-def env(key: str, prompt: str, action: Callable[[str], str] = input, default: Optional[str] = None) -> str:
+
+def env(
+    key: str,
+    prompt: str,
+    action: Callable[[str], str] = input,
+    default: Optional[str] = None,
+) -> str:
     res = os.getenv(key)
     while res is None or res == "":
         if default is not None:

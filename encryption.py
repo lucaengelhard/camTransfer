@@ -9,14 +9,17 @@ from enum import Enum
 
 import global_values
 
+
 class Suffix(Enum):
     ENC = ".enc"
     DEC = ".dec"
 
+
 PREFIX = bytes(f"{global_values.PREFIX}\n".encode("UTF8"))
 
+
 def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         data = f.read()
 
     cipher_rsa = PKCS1_OAEP.new(public_key)
@@ -36,17 +39,18 @@ def encrypt(path: Path, public_key: RSA.RsaKey, overwrite: bool = False):
     if overwrite:
         os.remove(path)
 
+
 def decrypt(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
     with open(path, "rb") as f:
         prefix = f.read(len(PREFIX))
         if prefix != PREFIX:
             raise ValueError("Not a camtransfer encrypted file")
-    
+
         enc_session_key = f.read(private_key.size_in_bytes())
         nonce = f.read(16)
         tag = f.read(16)
         ciphertext = f.read()
-    
+
     cipher_rsa = PKCS1_OAEP.new(private_key)
     session_key = cipher_rsa.decrypt(enc_session_key)
 
@@ -66,6 +70,7 @@ def decrypt(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
     if overwrite:
         os.remove(path)
 
+
 def decrypt_dir(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
     for file_path in path.iterdir():
         if not file_path.is_file():
@@ -77,23 +82,25 @@ def decrypt_dir(path: Path, private_key: RSA.RsaKey, overwrite: bool = False):
                     continue
         except:
             continue
-        
+
         try:
             decrypt(file_path, private_key, overwrite)
             print(f"Decrypted: {file_path}")
         except Exception as ex:
             print(ex)
-                
+
+
 def get_key(path: Path):
     with open(path, "rb") as keyfile:
         return RSA.import_key(keyfile.read())
+
 
 def create_keys(public: Path, private: Path):
     print(public)
     if public.exists():
         print(f"Key already exists at {public}")
         return
-    
+
     if private.exists():
         print(f"Key already exists at {private}")
         return

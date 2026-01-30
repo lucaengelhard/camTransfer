@@ -16,6 +16,7 @@ from global_values import FLAGS, FlagType, Mode, PREFIX
 
 stop_event = Event()
 
+
 def cli(refresh_rate: float = 0.1):
     spinner_cycle = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     spinner_index = 0
@@ -49,6 +50,7 @@ def cli(refresh_rate: float = 0.1):
             live.update(table)
 
             time.sleep(refresh_rate)
+
 
 def args():
     global FLAGS
@@ -124,7 +126,7 @@ def args():
     upload_dir = args.upload_dir
     public_key = None
     private_key = None
-    
+
     os.makedirs(save_dir, exist_ok=True)
 
     if FLAGS[FlagType.MODE] is Mode.STANDARD and FLAGS[FlagType.ENCRYPT]:
